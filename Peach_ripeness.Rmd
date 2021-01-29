@@ -1,0 +1,555 @@
+---
+title: "Otkrivanje znanja u podacima - Završni projekt"
+author:
+  - __Autori:__
+  - Anton Ilić, 
+  - Lorena Mršić
+  - __Mentor:__ 
+  - _prof.dr.sc._ Maja Matetić
+  - __Kolegij:__ 
+  - Otkrivanje znanja u podacima 
+  - _Odjel za informatiku Sveučilišta u Rijeci_
+
+date:
+  - Siječanj, 2021
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+toc-title: "Tablica sadržaja"
+fontsize: 13pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Radni zadatak
+
+Projektni zadatak je sastavni dio kolegija Otkrivanje znanja u podacima. Cilj je uz pomoć programske podrške u programskom jeziku R riješiti nebalansirani problem na praktičnom primjeru. Cilj je izgraditi model koji predviđa zrelost voća pomoću parametara izbjegavajući invazivne metode kao što je su naprimjer stiskanje voća radi provjere tvrdoće ili provođenje struje.
+
+Zadatak uključuje inicijalnu pripremu podataka te balansiranje SMOTE (_Eng. Synthetic Minority Oversampling TEchnique_) algoritmom. Nad obrađenim podacima je potrebno izvršiti predviđanje zrelosti algoritmima Random forest i logističkom regresijom te dodatno objašnjenje važnosti varijabli paketom DALEX korištenjem permutacija.  
+
+# Opis skupa podataka
+
+Skup podataka _peaches_100_ALL_2.xls_ je skup podataka koji sadrži 20 stupaca i 100 redova koji objašnjavaju svojstva sezonskog voća, točnije breskvi. 
+
+Neka od svojstva koja su opisana se odnose na veličinu, masu, čvrstoću, provodljivost struje te razne aspekte boja i nijansi. Podaci su pretežito u decimalnom tipu, uz iznimku subjektivne procjene postotka ploda prekrivenosti bojom. Ta je vrijednost određena pomoću ljudskog faktora, a ocjenjena je slovima A do F.
+
+Radi se o nebalansiranom skupu podataka, što znači da je u njemu otežana podjela podataka u skupove. Pritom pri podjeli u skupove problem predstavlja mala količina voća klasificiranog kao zrelo. U tu svrhu se uvodi metoda za stvaranje sintetičkih vrijednosti u svrhu stvaranja ravnoteže između broja zrelog i nezrelog voća.
+
+# Korišteni algoritmi
+
+## SMOTE
+
+SMOTE (_Eng. Synthetic Minority Oversampling TEchnique_) je algoritam koji se koristi kod modela strojnog učenja u kojima jedna klasa prevladava nad drugom.
+
+Algoritam sadrži nekoliko parametara koji definiraju rješenje ovisno o prirodi problema, a ta rješenja su:
+
+- Sinteza vrijednosti slabije zastupljene klase
+- Preuzrokovanje slabije zastupljene klase
+- Poduzrokovanje jače zastuppljene klase 
+- Pridodavanje većeg prioriteta slabije zastupljenoj klasi u odnosu na jače zastupljenu klasu.
+
+Slabije zastupljenoj klasi se pritom dodaju sintetizirane vrijednosti iz intervala postojećih vrijednosti. Pritom se koristi algoritam k-Najbližih susjeda (kNN).
+
+Podešavanje algoritma se sastoji od odabira ciljne varijable nad skupom podataka, broja najbližih susjeda i željenog broja slučajeva pridodanih od strane jače i slabije zastupljene varijable.
+
+## Random Forest
+
+Random Forest algoritam je metoda nadziranog učenja koja je poznata po svojoj preciznosti. Koristi se kod zadataka klasifikacije i regresije, a čine ga stabla odluke.
+
+Algoritam gradi stabla odluke ovisno o predefiniranom broju stabala i uzoraka s određenim ponavljanjem. Grananjem se priotm određuje atribut te izgrađuje grana koja će za taj atribut pružati najveću informacijsku dobit.
+
+Neke od mogućnosti koje algoritam pruža su odabir prediktora za što bolju korelaciju, broj varijabli u svakom čvoru, broj stabala, metoda razdvajanja stabala, _itd_...
+
+Radi se o jako korisnom algoritmu, ali veliki problem predstavlja brzina izvođenja nad većim skupovima podataka, što u ovom slučaju neće biti problem.
+
+## Logistička regresija
+
+Logistička regresija je klasifikacijski algoritam nadziranog učenja koji se koristi za pridruživanje opservacija diskretnom skupu klasa. Rezultat logističke regresije je sigmoidna funkcija koja označava vjerojatnost koja se može pridodavati korištenim klasama. 
+
+Radi se o binarnoj klasifikaciji čiji je krajnji rezultat vrijednost istinita ili lažna, a rezultati mogu poslužiti za određivanja uzročnosti na dobiveni model. Drugim riječima, logističkom regresijom je moguće odrediti utjecaj varijabli na i njihovih vrijednosti na konačni ishod.
+
+Neki od ulaznih parametara koje logistička regresija prima su skup podataka, odgovarajuća ciljna varijabla i metoda opisa greške.
+
+## Metrika važnosti varijable paketa DALEX
+
+Metrika važnosti varijable implementirana paketom DALEX fokusira se na mjerenje razlike u performansi modela isključivanjem ili modificiranjem jedne ili više varijabli. Pritom vrijednosti u ovoj metodi na neki način nisu isključene, već bivaju promjenjene kombinatornim postupkom permutiranja.
+
+Permutaciju definiramo kao svaku uređenu _n_-torku skupa od _n_ elemenata. Broj permutacija _n_-članog skupa je:
+
+__Pn = _n_·(_n_-1)·...·2·1__
+
+Drugim riječima, radi se o nizu brojeva u kojem je poredak striktno određen te se koristi druga vrijednost niza pri svakom pokušaju. Radi veće efikasnosti postupak se ponavlja u više iteracija, odnosno permutacija.
+
+Osnovna pretpostavka u procjeni metrike predlaže da ukoliko je varijabla važna, njezinim permutiranjem će se vrijednosti u modelu značajno promijeniti. Pritom se metrika određuje promjenom u performansu, odnosno što je varijabla važnija, to će se model više pogoršati.
+
+# Priprema podataka
+
+Za provođenje analize u ovom tipu, podatke je potrebno refaktorirati u određene oblike koji su kompatibilni s algoritmima koji će se koristiti.
+
+```{r wd, echo = FALSE}
+
+# Workspace cleaning
+#rm(list=ls())
+
+# Working directory
+#setwd('E:\\Faks\\Diplomski\\5 godina\\Otkrivanje znanja u podacima\\Predavanja\\Zavrsni projekt - Mrsic Ilic\\')
+setwd('C:\\Users\\usisavac\\Desktop\\Zavrsni_projekt\\')
+```
+
+## Učitavanje skupa podataka
+
+Skup podataka je u originalu uručen u obliku _.xls_ tablice koju je ručno potrebno prevesti u _.csv_. Pritom je za obradu i čitanje u većem djelu obrade podataka korišten paket _Tidyverse_. Radi čitanja _.csv_ datoteke u Europskom formatu, korišten je _read_csv2_ uz eksplicitnu naznaku encoding svojstva. 
+
+Budući da algoritmi koji se koriste u svrhu ovog projekta ne toleriraju tekstualne vrijednsti tipa _char_, stupac _AE_ je preveden u numerički oblik.
+
+```{r tidyverse, echo = FALSE, message = FALSE}
+
+#install.packages('tidyverse')
+library('tidyverse')
+
+```
+
+```{r read_csv, message=FALSE}
+# Data was originaly given in .xls file.
+
+# Reading data from .csv file
+data = read_csv2('peaches_100_ALL_2.csv', locale = locale(encoding = 'UTF-8'))
+
+# Changing character type column to int for further processing
+data$AE[data$AE == 'A'] = 6    #90-100% (A) - 6
+data$AE[data$AE == 'B'] = 5    #80-90% (B) - 5
+data$AE[data$AE == 'C'] = 4    #70-80% (C) - 4
+data$AE[data$AE == 'D'] = 3    #50-70% (D) - 3
+data$AE[data$AE == 'E'] = 2    #25-50% (E) - 2
+data$AE[data$AE == 'F'] = 1    # 0-25% (F) - 1
+
+data = transform(data, AE = as.numeric(AE))
+
+head(data)
+
+```
+
+## Prikaz statističkih podataka učitanih stupaca
+
+U nastavku slijedi statistički pregled stupaca radi dobivanja boljeg uvida u podatke.
+
+```{r csv_summary, echo = FALSE, message= FALSE} 
+
+summary(data)
+```
+
+## Dodavanje stupca za utvrđivanje zrelosti
+
+Osnovni prediktor za prikaz zrelosti je stupac _firm_ koji određuje tvrdoću svake jedinke voća. Što je taj broj manji, to je čvrstoća manja, a voće je zrelije. Taj će stupac biti korišten za osnovno određivanje stupca koji označava zrelost. Rezultat je stupac _target_, odnosno binarna varijabla koja sadrži vrijednosti 1 i 0, umjesto "zrelo" i "nezrelo". 
+
+Pritom je za rubni uvjet da bi voće bilo smatrano zrelim iskorišten odokativni medijan između minimuma(0.3300) i prvog kvartila(0.8175). Ta vrijednost iznosi 0.55, a rezultira omjerom nezrelog i zrelog voća u iznosu 90:10. U takvoj situaciji zrelo voće možemo smatrati rijetkim događajem zbog čega će biti potrebna daljnja optimizacija, odnosno balansiranje.
+
+Datoteka također sadrži 5 praznih redaka koji su u ovom pregledu prikazani kao N/A.
+
+```{r target}
+
+data = data %>%
+  mutate(target = as.factor(ifelse(firm <= 0.55, 1, 0)))
+
+summary(data$target)
+```
+
+Prije navedene N/A vrijednosti je potrebno očistiti. To je realizirano novijom funkcijom _drop_na()_ koju paket _tidyr_ nudi.
+
+```{r cleaning_na}
+
+data = data %>% drop_na()
+
+```
+
+## Priprema podataka za treniranje i testiranje
+
+U nastavku slijedi pregled zastupljenosti zrelog i nezrelog voća u obliku omjera i postotka. Budući da se radi o skupu od točno 100 slučajeva, prikaz je jednoznačan ali je imao veliku ulogu u određivanju vrijednosti čvrstoće. Ponovno se radi o omjeru 90:10 kao i u prijašnjem prikazu. 
+
+``` {r event_quantification, echo = FALSE}
+
+print(table(data$target))
+
+```
+
+Radi daljnje obrade potrebni su sljedeći paketi koji .
+
+```{r algorithm_libraries, echo=TRUE, message=FALSE}
+library(caret)
+library(randomForest)
+library(e1071)
+```
+
+Skupove je potrebno particionirati na skup za treniranje i testiranje. Pritom je određen omjer podataka u iznosu od 70:30.
+
+```{r partitioning, message=FALSE}
+
+# All values must be of type num or factor
+data$AE = as.factor(data$AE)
+
+# Converting dataset to data frame
+data = as.data.frame(data)
+
+
+set.seed(42)
+
+#promjena p = 0.5 na 0.7
+data_p = createDataPartition(data$target,
+                             p = 0.7,
+                             list = FALSE,
+                             times = 1)
+
+data_train = data[data_p,]
+data_test  = data[-data_p,]
+
+```
+
+Radi o nebalansiranom problemu, potrebno je provjeriti omjer zrelih i nezrelih jedinki voća na skupu za treniranje i testiranje zbog mogućih problema kdo testiranja modela. Pritom je vidljivo da su omjeri u oba skupa isti, a iznose 90:10.
+
+```{r rf_nonbalanced_table, echo = FALSE}
+"Omjer podataka na skupu za treniranje"
+prop.table(table(data_train$target))
+
+"Omjer podataka na skupu za testiranje"
+prop.table(table(data_test$target))
+
+```
+
+# Primjena nebalansiranog algoritama
+
+## Random Forest algoritam - Nebalansirani skup podataka
+
+Radi upoznavanja s prirodom problema, proveden je algoritam slučajnih šuma (_eng._ Random Forest) nad nebalansiranim i balansiranim skupom podataka s istim parametrima. Radi kontrole preklapanja podataka korištena je kontrola s metodom _repeatedcv_ koja će biti korištena i kod balansiranog modela slučajnih šuma radi mogućnosti daljnjih usporedbi s performansama nebalansiranog skupa. 
+
+```{r random_forest_unbalanced, message=FALSE, warning=FALSE}
+
+# Fit control with default parameters
+fit_control = trainControl(method="repeatedcv",
+                          number = 10,
+                          repeats = 3)
+
+set.seed(42)
+
+model_rf_u = train(target ~ .-firm,
+                 data = data_train,
+                 ntree = 500,
+                 method = "rf",
+                 preProcess = c("scale", "center"),
+                 verbose = FALSE)
+
+model_rf_u
+
+```
+
+Model uspostavlja navodnu točnost od 90.47% u drugom pokušaju. Graf u nastavku prikazuje da  točnost s daljnjim grananjem slučajne šume drastično pada.
+
+
+```{r rf_u_plot, echo = FALSE}
+
+plot(model_rf_u)
+
+```
+
+
+
+### Random Forest - Metrika važnosti varijabli nebalansiranog skupa
+
+Za bolji prikaz i interpretaciju podataka koristimo metriku važnosti značajka, te je dobivamo uvid u 20 varijabli koje su poredane silazno u odnosu na pridodani značaj. Prva po redu je zs odnosno otpor električne struje breskve, nakon nje theta odnosno imaginarni dio otpora breskve i volumen. Na prvi pogled se pregled važnosti čini realan, a podaci zadovoljavajući.
+
+```{r rf_unbalanced_varImp }
+varImp(model_rf_u, normalize = TRUE)
+
+varimpGraph_rf_u = varImp(model_rf_u, varImp.train = FALSE)
+plot(varimpGraph_rf_u, top=10, main="Variable Importance")
+```
+
+### Random Forest - Matrica konfuzije nebalansiranog skupa podataka
+
+Matrica konfuzije u nastavku predviđa točnost od 90% što je i očekivano s obzirom na činjenicu da se radi o većinski nezrelom voću. Zbog velikog nebalansa skupova, ukoliko svaku jedinku voća klasificiramo kao nezrelu točnost će uvijek biti blizu 90%. Problem koji će se u svakom slučaju javiti je da zrelo voće neće biti moguće izolirati, kao u ovom slučaju gdje su sve tri jedinke zrelog voća klasificirane kao nezrele. Kao rješenje problema biti će uvedena metoda za generiranje sintetiziranih vrijednosti većinskog i manjinskog skupa skupova radi efikasnijeg treniranja modela nad više podataka.
+
+```{r rf_unbalanced_prediction}
+
+ test_predict = predict(model_rf_u, data_test)
+ confusionMatrix(test_predict,as.factor(data_test$target))
+
+```
+
+# Balansiranje skupova podataka metodom SMOTE
+
+Metoda za balansiranje modela SMOTE je sastavni dio DMwR paketa koji je potrebno učitati.
+
+```{r dmwr_package, message=FALSE}
+
+#install.packages('DMwR')
+library(DMwR)
+
+```
+
+U nastavku stvaramo varijablu koja sadrži skup za treniranje obrađen SMOTE funkcijom za balansiranje. Pritom je čvrstoća kao varijabla balansiranja ignorirana zbog visoke korelacije s ciljnom varijablom. Za shvaćanje rada ovog algoritma nužno je objasniti rad parametara:
+
+* _perc_over_ - Generira sintetizirane vrijednosti manjinskog skupa (Zrelih jedinki voća)
+* _perc_under_ - Generira sintetizirane vrijednosti većinskog skupa (Nezrelih jedinki voća)
+
+Radi daljnje obrade u kojoj podaci trebaju biti balansirani poželjno je da omjer većinskog i manjinskog skupa bude 50:50, što je predloženim vrijednostima uspješno postignuto. Vrijednosti su odabrane kroz brojne pokušaje provođenja modela u nastavku u odnosu na rezultate koji su generirali. Posebno je bilo potrebno uzeti u obzir fenomen loše varijance između podataka i potenciranje loših svojstava kod prevelikog broja sintetiziranih vrijednosti.
+
+```{r smoting}
+
+train_balanced = SMOTE (target ~ .-firm,
+                        data = data_train,
+                        perc.over = 250,
+                        perc.under=150
+                        )
+
+prop.table(table(train_balanced$target))
+
+```
+
+# Primjena balansiranih algoritama
+
+U nastavku slijedi primjena balansiranog skupa podataka u algoritmima slučajnih šuma i logističke regresije.
+
+## Random Forest algoritam - Balansirani skup podataka
+
+Kod algoritma slučajnih šuma korišteni su isti parametri kao u prošlom pokušaju uz razliku korištenja balansiranog skupa podataka. Graf u nastavku prikazuje uzlaznu točnost, a odabrana točnost iznosi 92.16% što ujedno čini najbolji rezultat od svih provedenih eksperimenata. 
+
+```{r random_forest_balanced, messages = FALSE}
+
+set.seed(42)
+
+model_rf_bal = train(target ~ .-firm,
+                 data = train_balanced, 
+                 method = "rf",
+                 preProcess = c("scale", "center"),
+                 trControl = fit_control,
+                 verbose = FALSE)
+
+model_rf_bal
+
+```
+
+U nastavku slijedi grafički prikaz točnosti modela slučajnih šuma balansiranog skupa sa svim prediktorima.
+
+
+```{r rf_bal_plot, echo = FALSE}
+
+plot(model_rf_bal)
+
+```
+
+### Random Forest - Metrika važnosti varijabli balansiranog skupa
+
+U odnosu na nebalansirani skup podataka vidljivo je kako su se važnosti drastično promijenile. Trenutno su kao najvažnije varijable prezentirane redom: volume, color, C2, L1, _itd_...
+
+```{r rf_balanced_varImp}
+varImp(model_rf_bal, normalize = TRUE)
+
+varimpGraph_rf_bal = varImp(model_rf_bal, varImp.train = FALSE)
+plot(varimpGraph_rf_bal, top=10, main="Variable Importance")
+```
+
+### Random Forest - Matrica konfuzije balansiranog skupa podataka
+
+Matrica konfuzije također prikazuje bolji rezultat točno klasificiranih podataka. Pritom je model uspio raspoznati zrelo voće prema prije navedenim varijablama uz točnost od 93.33% uz grešku kod klasificiranja dvija od pet komada zrelog voća. Formirano je mišljenje da se radi o realnom rezultatu budući da se fokus kod predikcije stavlja na neinzvazivne metode poput gnječenja i provođenja električne energije kroz voće.
+
+```{r rf_balanced_prediction}
+
+test_predict = predict(model_rf_bal, data_test)
+confusionMatrix(test_predict,as.factor(data_test$target))
+
+```
+
+## Logistička regresija - Balansirani skup podataka
+
+U modelu logističke regresije pretpostavljeni ishodi odnosno rezultati modeliraju se kao linearna kombinacija varijabli predviđanja.
+
+Za prvi primjer provjeravat ćemo koliki je ishod da će tamnija breskva biti zrelija od svjetlije. Potrebno je uređivanje podataka i s obzirom da nema drugog pojašnjenja za varijablu color, pretpostavit ćemo da su color<50.65 svjetlije, a ostatak tamnije.
+
+```{r log_reg_bal1}
+
+#summary(train_balanced$color)
+
+data_log <- train_balanced %>%
+  mutate(color = as.factor(ifelse(color<52,"Lighter","Darker")))
+
+set.seed(42)
+
+model_lm <- lm(firm ~ color-target, data = data_log, )
+summary(model_lm)
+
+
+```
+
+Residuals su dobri jer su centrirani oko 0 i skoro simetrični. Zatim prelazimo na koeficijente. Izračune je sljedeći:
+
+0.6070 + 1.0729 · color.Lighter 
+
+- prva varijabla je Intercept odnosno pokazatelj zrelosti breskve
+- varijabla color.Lighter je jednaka 0 ako je boja svjetlija, a 1 ako je tamnija
+
+Ako želimo predvidjeti pokazatelj zrelosti breskve za svjetliju boju --> 0.6070 + 1.0729 * 0 = 0.607, što govori da je šansa da je svjetlija breskva zrela jednaka 0.607. Za tamnije breskve šansa je jednaka 1.6799.
+
+
+Za drugi primjer napraviti ćemo model koji koristi sve varijable kako bi predvidio zrelost breskve.
+
+
+
+```{r log_reg_bal2}
+
+
+set.seed(42)
+
+model_lm <- lm(firm ~ .-target, data = train_balanced)
+summary(model_lm)
+
+
+
+```
+
+Opet ćemo se dotaknuti koeficijenata, pa tako vidimo kako zs i B1 nisu korisni prediktori zato što im je Pr broj daleko veći od 0.05, dok im se pridružuje i A1 sa malo većim Pr-om od 0.062237. Najbolji prediktor po ovom modelu ispada da je WI_CIE2, a nakon njega color i num. Među najkorisnijim prediktorima (***) se još nalaze i C2, L1, H2, L2, AE4 i AE6. 
+
+```{r log_reg_bal_plot1, warning=FALSE, echo = FALSE}
+
+plot(model_lm)
+
+```
+
+## Implementacija metrike važnosti iz paketa Dalex
+
+Za dodatno objašnjenje modela nad balansiranim podacima korištena je metrika važnosti paketa Dalex te je biblioteku potrebno učitati. Cilj je otkriti postoji li neka treća perspektiva o važnosti varijabli permutiranjem svakog pojedinog stupca.
+
+### Metrika važnosti nad balansiranim modelom slučajnih šuma
+
+```{r message=FALSE}
+
+#install.packages("DALEX")
+library("DALEX")
+```
+
+Za početak je početno napraviti jedinistvenu reprezentaciju balansiranog modela funkcijom _explain()_ gdje se definira ciljna varijabla. Nadalje je potrebno pridružiti skup podataka za testiranje nad kojim će se provjera provoditi.
+
+U nastavku također slijedi ispis podataka o modelu.
+
+```{r message=FALSE, warning=FALSE}
+
+explain_rf_bal <- explain(model_rf_bal, 
+                   data = data_test,
+                   y = data_test$target,
+                 label = "Balanced dataset")
+
+```
+
+Nakon što je model objašnjen, metodom _model_parts()_ permutiramo svaku pojedinu varijablu respektivo. Provodi se 50 permutacija nad cijelim skupom podataka te ukoliko je varijabla koja se permutira važna, vrijednost _mean_droput_loss_ će biti veća. 
+
+Problem ove metode je nasumična priroda permutacija zbog koje rezultati nikada neće biti jednoznačni. Zbog toga je potrebno analizu provesti više puta i na taj način formirati subjektivno opažanje. Permutacija je skupa operacija po pitanju rersursa te obrada većih skupova podataka može biti dugotrajan proces, što u ovoj analizi nije bio slučaj.
+
+
+```{r model_parts_balanced}
+set.seed(42)
+
+vimp_rf_bal <- model_parts (explain_rf_bal, B = 50, N = NULL)
+vimp_rf_bal
+
+```
+
+### Vizualizacija metode važnosti varijable
+
+Graf u nastavku predstavlja pregledniji prikaz prošlih rezultata pri čemu je svaka varijabla ima prikaz u obliku stupčastog grafa i kutijastog dijagrama.
+Vidljivo je da najveći utjecaj imaju varijable volume, A1, C2, L2, _itd_ dok utjecaj negativne korelacije imaju i mass i L2 što nije čudno budući da je masa usko vezana uz volumen, L2 vezan za L1, zbog čega je prisutnost samo jednih od njih u modelu vjerojatno dovoljna.
+
+```{r var_imp_graph, echo = FALSE}
+
+library("ggplot2")
+
+plot(vimp_rf_bal)
+
+
+```
+
+## Random Forest algoritam 2 - Balansirani skup podataka
+
+Za testiranje prije dobivenih pretpostavki izabrane su varijable koje su prethodni modeli izabrali kao najvažnije. Iz tog skupa varijabli su izbačene prije objašnjene invazivne metode otkrivanja zrelosti, a ostavljene su one koje se odnose na fizičko svojstvo volumena i obojenosti svake jedinke voća.
+
+Te varijable su:
+
+* volume - Model slučajne šume i metrika važnosti varijable su ga označili kao najbitnijeg
+* WI_CIE2 - Pretpostavljen kao prva najvažnija varijabla od strane logističke regresije
+* color - Pretpostavljen kao druga najvažnija varijabla od strane logističke regresije i modela slučajnih šuma
+* C2 - Pretpostavljen kao druga najvažnija varijabla od strane metrike važnosti
+* L2 - Ima najveću negativnu razliku u metrici važnosti
+* L1 - Pretpostavljen kao važan od strane logističke regresije
+
+```{r rf_2, warning=FALSE}
+
+set.seed(42)
+
+model_rf_bal_2 = train(target ~ volume + color + L1 + L2 + C2  + WI_CIE2,
+                 data = train_balanced, 
+                 method = "rf",
+                 preProcess = c("scale", "center"),
+                 trControl = fit_control,
+                 verbose = FALSE)
+
+model_rf_bal_2
+
+```
+
+Izgrađeni model nad skupom za treniranje ima točnost od 92.16% u drugom pokušaju.
+
+```{r new_data_plot, warning=FALSE, echo = FALSE}
+
+plot(model_rf_bal_2)
+
+```
+
+Pregledom važnosti ponovno je vidljiv redom najveći utjecaj varijabli: volume, color, C2, L2 dok zadnja varijabla prema ovom modelu nema značaj za predikciju.
+
+```{r dodatno2, warning=FALSE}
+
+varImp(model_rf_bal_2, normalize = TRUE)
+
+varimpGraph_rf_bal_2 = varImp(model_rf_bal_2, varImp.train = FALSE)
+plot(varimpGraph_rf_bal_2, top=5, main="Variable Importance")
+
+```
+
+Matrica konfuzije prikazuje točnost od 90% pri korištenju neinvazivnih varijabli. Pritom su 3 od 6 jedinki zrelog voća klasificirane kao nezrele, dok su sve jedinke nezrelog voća uspješno klasificirane kao nezrele.
+
+```{r dodatno3, warning=FALSE}
+
+test_predict = predict(model_rf_bal_2, data_test)
+confusionMatrix(test_predict,as.factor(data_test$target))
+
+```
+
+# Zaključak
+
+Cilj ovog projekta bio je uz pomoć programske podrške riješiti nebalansirani problem na praktičnom primjeru – predvidjeti zrelost voća ovisno o važnosti parametara. 
+
+U radu je prikazana priprema podataka te balansiranje SMOTE algoritmom. Nad balansiranim podacima je izvršeno predviđanje zrelosti algoritmima Random forest, logističkom regresijom i matricom konfuzije te je i dodatno pojašnjena važnost varijabli uz pomoć paketa DALEX korištenjem permutacija i korištenjem metrike važnosti varijabli. Za potrebe usporedbe, prije balansiranja podataka izvršeno je predviđanje zrelosti algoritmima Random forest i matricom konfuzije te objašnjenje varijabli korištenjem metrike važnosti varijabli. 
+
+Kod nebalansiranog skupa podataka točnost modela RF je iznosila 90.47% te je kroz interpretaciju podataka metrikom važnosti varijabli vidljivo kako su top 5 najvažnijih varijabli: zs, theta, volume, TA, C1. Matrica konfuzije predviđa točnost od 90% nebalansiranog skupa što je i očekivano s obziorm da se radi o većinski nezrelom voću ( omjer 90 : 10 ), te je od 27 nezrelih breskvi, krivo predvidio 3. 
+
+Balansiranjem podataka koristeći SMOTE situacija se pomalo mijenja. Točnost modela RF raste na 92.16%, dok se u top 5 najvažnijih varijabli sada nalaze: volume, color, C2, L1, zs. Točnost matrice konfuzije se također povećala na 93.33% uz grešku kod klasificiranja 2 od 5 zrelog voća. Za balansirani skup stvoren je i model linearne regresije koji je za najbolje prediktore zrelosti naveo: WI_CIE2, color, num, C2, L1.
+Metrika važnosti iz paketa Dalex (iako je svaki put malo drugačije zbog permutacija), najčešće za varijable s najvećom važnosti prikazuje varijable volume, A1, C2, L2 i color.
+
+Kako bi još bolje predvidjeli zrelost voća iz skupa varijabli izbačene su invazivne metode otkrivanja zrelosti kao što su stiskanje voća radi provjere tvrdoće ili provođenje struje (npr. theta i zs), a ostavljane su one koje se odnose na fizičko svojstvo volumena i obojenosti svake jedinke voća. Samim time došli smo do najvažnijih parametara u određivanju zrelosti voća, a to su redom:
+
+* Volume – volumen breskve u cm3
+* C2 –  CIELCh komponente najsvjetlijeg dijela breskve
+* Color – svjetlina breskve (pretpostavka) 
+* L2 –  CIELAB komponente najsvjetlijeg dijela breskve
+* L1 – CIELAB komponente najtamnijeg dijela breskve
+* WI_CIE2 -  CIE Whiteness Index najsvjetlijeg dijela breskve
+
+
+# Literatura
+
+* https://rikunert.com/SMOTE_explained
+* https://builtin.com/data-science/random-forest-algorithm
+* https://medium.com/@sonish.sivarajkumar/logistic-regression-for-beginners-4881ae431870
+* http://ema.drwhy.ai/featureImportance.html
+* https://stats.stackexchange.com/questions/183320/logistic-glm-with-good-predictors-is-giving-p-values-1?fbclid=IwAR0Sjyzr-evE3d3yCjJASK9SgunWjHxsde4C86ZwCnsAg0ukh1a-jFuKLQI
